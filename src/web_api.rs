@@ -6,11 +6,7 @@ use anyhow::{Context, bail};
 use log::{debug, warn};
 use reqwest::{RequestBuilder, Response, StatusCode, multipart};
 use serde::{Deserialize, Serialize};
-use std::{
-    env,
-    sync::atomic::{AtomicBool, Ordering},
-    time::Duration,
-};
+use std::{env, time::Duration};
 use tokio::sync::Mutex;
 use tokio::time::Instant;
 
@@ -26,7 +22,6 @@ pub struct WebApiClient {
     api_key: String,
     creator: config::Creator,
     expected_price: Option<u32>,
-    fatally_failed: AtomicBool,
     /// Shared rate limit state: when we can next make a request
     rate_limit_reset: Mutex<Option<Instant>>,
 }
@@ -38,7 +33,6 @@ impl WebApiClient {
             api_key,
             creator,
             expected_price,
-            fatally_failed: AtomicBool::new(false),
             rate_limit_reset: Mutex::new(None),
         }
     }
@@ -139,12 +133,10 @@ impl WebApiClient {
     where
         F: Fn(&reqwest::Client) -> RequestBuilder,
     {
-        if self.fatally_failed.load(Ordering::SeqCst) {
-            bail!("A previous request failed due to a fatal error");
-        }
-
         const MAX: u8 = 5;
+        const MAX_EDGE_RETRIES: u8 = 4;
         let mut attempt = 0;
+        let mut edge_attempt = 0;
 
         loop {
             {
@@ -191,8 +183,34 @@ impl WebApiClient {
                 }
                 StatusCode::OK => return Ok(res),
                 _ => {
+                    debug!("{status} response headers: {:?}", res.headers());
                     let body = res.text().await?;
-                    self.fatally_failed.store(true, Ordering::SeqCst);
+
+                    // The assets API always returns JSON errors. A non-JSON 400 comes from
+                    // Roblox's edge proxy rejecting the request before it reached the API,
+                    // so nothing was created and it's safe to resend.
+                    if status == StatusCode::BAD_REQUEST
+                        && serde_json::from_str::<serde_json::Value>(&body).is_err()
+                    {
+                        if edge_attempt < MAX_EDGE_RETRIES {
+                            let wait = Duration::from_secs(1 << edge_attempt);
+                            warn!(
+                                "Request rejected by Roblox's edge (400), retrying in {:.2} seconds",
+                                wait.as_secs_f64()
+                            );
+
+                            tokio::time::sleep(wait).await;
+                            edge_attempt += 1;
+
+                            continue;
+                        }
+
+                        bail!(
+                            "Request failed with status {status} after {MAX_EDGE_RETRIES} retries \
+                            (rejected by Roblox's edge, not the assets API):\n{body}"
+                        );
+                    }
+
                     bail!("Request failed with status {status}:\n{body}");
                 }
             }
