@@ -120,6 +120,11 @@
           "description": "A glob pattern to match files to upload",
           "type": "string"
         },
+        "studio_meshes": {
+          "description": "When syncing to Studio, convert FBX, glTF and OBJ files into Roblox meshes instead of referencing their uploaded models. OBJ files are only synced to Studio, and only when this is enabled",
+          "type": "boolean",
+          "default": false
+        },
         "web": {
           "description": "A map of paths relative to the input path to existing assets on Roblox",
           "type": "object",

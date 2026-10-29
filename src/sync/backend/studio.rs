@@ -61,7 +61,7 @@ impl Backend for Studio {
                 Some(entry) => Ok(Some(AssetRef::Cloud(entry.asset_id))),
                 None => {
                     warn!(
-                        "Models and Animations cannot be synced to Studio without having been uploaded first"
+                        "Models and Animations cannot be synced to Studio without having been uploaded first. Enable `studio_meshes` on the input to sync FBX, glTF and OBJ files as meshes instead"
                     );
                     Ok(None)
                 }

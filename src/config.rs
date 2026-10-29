@@ -93,6 +93,10 @@ pub struct Input {
     #[serde(default = "default_true")]
     pub bleed: bool,
 
+    /// When syncing to Studio, convert FBX, glTF and OBJ files into Roblox meshes instead of referencing their uploaded models. OBJ files are only synced to Studio, and only when this is enabled
+    #[serde(default)]
+    pub studio_meshes: bool,
+
     /// A map of paths relative to the input path to existing assets on Roblox
     #[serde(default)]
     #[schemars(with = "HashMap<PathBuf, WebAsset>")]

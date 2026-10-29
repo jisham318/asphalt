@@ -2,7 +2,11 @@ use crate::{
     config::WebAsset,
     hash::Hash,
     lockfile::LockfileEntry,
-    util::{alpha_bleed::alpha_bleed, svg::svg_to_png},
+    util::{
+        alpha_bleed::alpha_bleed,
+        mesh::{MeshSource, convert_to_mesh},
+        svg::svg_to_png,
+    },
 };
 use anyhow::Context;
 use bytes::Bytes;
@@ -28,6 +32,7 @@ const SUPPORTED_EXTENSIONS: &[(&str, AssetCtor)] = &[
     ("fbx", |_| Ok(AssetType::Model(ModelType::Fbx))),
     ("gltf", |_| Ok(AssetType::Model(ModelType::GltfJson))),
     ("glb", |_| Ok(AssetType::Model(ModelType::GltfBinary))),
+    ("obj", |_| Ok(AssetType::Model(ModelType::Obj))),
     ("rbxm", |data| {
         let format = RobloxModelFormat::Binary;
         if is_animation(data, &format)? {
@@ -94,7 +99,20 @@ impl Asset {
         })
     }
 
-    pub fn process(&mut self, font_db: Arc<fontdb::Database>, bleed: bool) -> anyhow::Result<()> {
+    pub fn process(
+        &mut self,
+        font_db: Arc<fontdb::Database>,
+        bleed: bool,
+        convert_meshes: bool,
+    ) -> anyhow::Result<()> {
+        if convert_meshes && let Some(source) = self.ty.mesh_source() {
+            self.data = convert_to_mesh(&self.data, source)
+                .context("Failed to convert to mesh")?
+                .into();
+            self.ty = AssetType::Mesh;
+            self.ext = "mesh".to_string();
+        }
+
         if self.is_svg {
             self.data = svg_to_png(&self.data, font_db)
                 .context("Failed to convert to PNG")?
@@ -121,13 +139,25 @@ pub enum AssetType {
     Image(ImageType),
     Audio(AudioType),
     Video(VideoType),
+    /// A Roblox `.mesh` file converted from a model. Only produced when syncing to Studio
+    Mesh,
 }
 
 impl AssetType {
+    pub fn mesh_source(&self) -> Option<MeshSource> {
+        match self {
+            AssetType::Model(ModelType::Fbx) => Some(MeshSource::Fbx),
+            AssetType::Model(ModelType::Obj) => Some(MeshSource::Obj),
+            AssetType::Model(ModelType::GltfJson | ModelType::GltfBinary) => Some(MeshSource::Gltf),
+            _ => None,
+        }
+    }
+
     // https://create.roblox.com/docs/cloud/guides/usage-assets#supported-asset-types-and-limits
 
     pub fn asset_type(&self) -> &'static str {
         match self {
+            AssetType::Mesh => "Mesh",
             AssetType::Model(_) => "Model",
             AssetType::Animation => "Animation",
             AssetType::Image(_) => "Image",
@@ -144,6 +174,9 @@ impl AssetType {
             AssetType::Model(ModelType::GltfJson) => "model/gltf+json",
             AssetType::Model(ModelType::GltfBinary) => "model/gltf-binary",
             AssetType::Model(ModelType::Roblox) => "model/x-rbxm",
+            // Neither of these can be uploaded, they're only synced to Studio
+            AssetType::Model(ModelType::Obj) => "model/obj",
+            AssetType::Mesh => "application/octet-stream",
 
             AssetType::Image(ImageType::Png) => "image/png",
             AssetType::Image(ImageType::Jpg) => "image/jpeg",
@@ -191,6 +224,7 @@ pub enum ModelType {
     Fbx,
     GltfJson,
     GltfBinary,
+    Obj,
     Roblox,
 }
 

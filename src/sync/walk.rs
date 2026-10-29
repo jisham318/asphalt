@@ -38,6 +38,7 @@ struct InputState {
     input_prefix: PathBuf,
     seen_hashes: Arc<Mutex<HashMap<Hash, PathBuf>>>,
     bleed: bool,
+    convert_meshes: bool,
 }
 
 pub async fn walk(params: Params, config: &Config, tx: &UnboundedSender<super::Event>) {
@@ -45,6 +46,7 @@ pub async fn walk(params: Params, config: &Config, tx: &UnboundedSender<super::E
 
     for (input_name, input) in &config.inputs {
         let input_prefix = config.project_dir.join(input.include.get_prefix());
+        let convert_meshes = input.studio_meshes && matches!(params.target, SyncTarget::Studio);
 
         let state = Arc::new(InputState {
             params: params.clone(),
@@ -52,6 +54,7 @@ pub async fn walk(params: Params, config: &Config, tx: &UnboundedSender<super::E
             input_prefix: input_prefix.clone(),
             seen_hashes: Arc::new(Mutex::new(HashMap::new())),
             bleed: input.bleed,
+            convert_meshes,
         });
 
         let mut join_set = JoinSet::new();
@@ -84,6 +87,10 @@ pub async fn walk(params: Params, config: &Config, tx: &UnboundedSender<super::E
                 continue;
             };
             if !asset::is_supported_extension(ext) {
+                continue;
+            }
+            // OBJ files can't be uploaded, so they're only synced as converted meshes
+            if ext == "obj" && !convert_meshes {
                 continue;
             }
 
@@ -161,10 +168,11 @@ async fn process_entry(
     if is_new {
         let font_db = state.params.font_db.clone();
         let bleed = state.bleed;
+        let convert_meshes = state.convert_meshes;
 
         asset = tokio::task::spawn_blocking(move || -> anyhow::Result<Asset> {
             let mut asset = asset;
-            asset.process(font_db, bleed)?;
+            asset.process(font_db, bleed, convert_meshes)?;
             Ok(asset)
         })
         .await?

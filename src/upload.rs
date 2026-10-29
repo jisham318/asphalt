@@ -1,5 +1,10 @@
-use crate::{asset::Asset, cli::UploadArgs, config::Creator, web_api::WebApiClient};
-use anyhow::Context;
+use crate::{
+    asset::{Asset, AssetType, ModelType},
+    cli::UploadArgs,
+    config::Creator,
+    web_api::WebApiClient,
+};
+use anyhow::{Context, bail};
 use fs_err::tokio as fs;
 use relative_path::PathExt;
 use resvg::usvg::fontdb::Database;
@@ -15,8 +20,12 @@ pub async fn upload(args: UploadArgs) -> anyhow::Result<()> {
     let mut asset =
         Asset::new(path.relative_to(".")?, data.into()).context("Failed to create asset")?;
 
+    if matches!(asset.ty, AssetType::Model(ModelType::Obj)) {
+        bail!("OBJ files can't be uploaded to Roblox");
+    }
+
     asset
-        .process(Arc::new(font_db), args.bleed)
+        .process(Arc::new(font_db), args.bleed, false)
         .context("Failed to process asset")?;
 
     let creator = Creator {

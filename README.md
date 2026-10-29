@@ -11,6 +11,7 @@ The documentation below is associated with the current commit on main. To view d
 -   Generates Luau or TypeScript code so you can use them in your game
 -   Can target Roblox users or groups
 -   Processes SVGs into PNGs and alpha bleeds images for crisp edges
+-   Converts 3D models into Roblox meshes when syncing to Studio
 -   Allows defining assets you already uploaded
 
 ## Installation
@@ -152,6 +153,8 @@ output_path = "src/shared"
 	-	A map of paths relative to the input path to existing assets on Roblox.
 - 	`bleed`: boolean (optional)
 	- 	Whether to alpha bleed images. Defaults to `true`. Keep in mind that changing this setting won't invalidate your lockfile or reupload your images.
+- 	`studio_meshes`: boolean (optional)
+	- 	When syncing to Studio, convert FBX, glTF and OBJ files into Roblox `.mesh` files instead of referencing their uploaded models. Every mesh in a file is merged into one, and one meter becomes one stud (OBJ coordinates are used as-is). OBJ files are only synced when this is enabled, since they can't be uploaded. Defaults to `false`.
 
 #### WebAsset
 
@@ -181,6 +184,7 @@ Make sure that you select an appropriate IP and that your API key is under the C
 - Roblox Models (.rbxm, .rbxmx)
 - 3D Models (.fbx, .gltf, .glb)
 	- Roblox does not offer control over the import settings through the web API. As such, this is not a route most should take. You should instead use the [3D Importer](https://create.roblox.com/docs/art/modeling/3d-importer) to upload these assets, then either sync them with Rojo or save them as Roblox model files.
+	- When syncing to Studio with `studio_meshes` enabled, these (and .obj files) are converted into Roblox meshes locally instead.
 
 ## Code Generation
 
