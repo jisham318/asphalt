@@ -80,6 +80,12 @@ You can also perform a dry run to verify which assets will be synced. This exits
 asphalt sync cloud --dry-run
 ```
 
+To sync only some types of assets, for example to stay under a daily audio upload limit, pass `--only` with a comma-separated list of `image`, `audio`, `model`, `animation` and `video`. Assets of other types keep the IDs already in your lockfile. New assets of other types are skipped: they aren't uploaded and are left out of codegen until a sync includes their type.
+
+```bash
+asphalt sync cloud --only image,model
+```
+
 ### `asphalt migrate-lockfile`
 
 Will migrate your lockfile to the newest format, if there is one. See `asphalt migrate-lockfile --help` for more information.
