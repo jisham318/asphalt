@@ -1,5 +1,5 @@
 use crate::{
-    asset::{self, Asset},
+    asset::{self, Asset, AssetKind},
     cli::SyncTarget,
     config::Config,
     hash::Hash,
@@ -27,6 +27,7 @@ use walkdir::WalkDir;
 
 pub struct Params {
     pub target: SyncTarget,
+    pub only: Option<Vec<AssetKind>>,
     pub existing_lockfile: Lockfile,
     pub font_db: Arc<fontdb::Database>,
     pub backend: Option<TargetBackend>,
@@ -160,6 +161,27 @@ async fn process_entry(
                 seen_hashes.insert(asset.hash, path.into());
             }
         }
+    }
+
+    if let Some(only) = &state.params.only
+        && !only.contains(&asset.ty.kind())
+    {
+        let event = match lockfile_entry {
+            Some(entry) => super::Event::Finished {
+                state: super::EventState::Synced { new: false },
+                input_name: state.input_name.clone(),
+                path: path.into(),
+                rel_path: asset.path.clone(),
+                hash: asset.hash,
+                asset_ref: Some(entry.into()),
+            },
+            None => {
+                debug!("Skipping {} (type not in --only)", rel_path);
+                super::Event::Skipped(path.into())
+            }
+        };
+        tx.send(event).unwrap();
+        return Ok(());
     }
 
     let always_target = matches!(state.params.target, SyncTarget::Studio | SyncTarget::Debug);

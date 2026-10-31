@@ -122,6 +122,11 @@ pub async fn collect_events(
 
                 progress.in_flight.remove(&path);
             }
+            super::Event::Skipped(path) => {
+                seen_paths.insert(path.clone());
+                progress.skipped += 1;
+                progress.in_flight.remove(&path);
+            }
             super::Event::Failed(path) => {
                 progress.failed += 1;
                 progress.in_flight.remove(&path);
@@ -149,6 +154,7 @@ struct Progress {
     synced: u64,
     new: u64,
     dupes: u64,
+    skipped: u64,
     failed: u64,
 }
 
@@ -178,6 +184,7 @@ impl Progress {
             synced: 0,
             new: 0,
             dupes: 0,
+            skipped: 0,
             failed: 0,
         }
     }
@@ -201,6 +208,10 @@ impl Progress {
             parts.push(format!("{} duplicates", self.dupes));
         }
 
+        if self.skipped > 0 {
+            parts.push(format!("{} skipped", self.skipped));
+        }
+
         let in_flight = self.in_flight.len();
         if in_flight > 0 {
             parts.push(format!("{} processing", in_flight));
@@ -215,7 +226,8 @@ impl Progress {
     }
 
     fn update(&self) {
-        self.inner.set_position(self.synced + self.dupes);
+        self.inner
+            .set_position(self.synced + self.dupes + self.skipped);
         self.inner.set_length(self.discovered);
         self.inner.set_message(self.get_msg());
     }

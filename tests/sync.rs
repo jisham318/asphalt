@@ -1,6 +1,10 @@
 use assert_fs::{fixture::ChildPath, prelude::*};
 use common::Project;
-use predicates::{Predicate, prelude::predicate, str::contains};
+use predicates::{
+    Predicate,
+    prelude::{PredicateBooleanExt, predicate},
+    str::contains,
+};
 use std::{fs, path::Path};
 use toml::toml;
 
@@ -378,4 +382,109 @@ fn brace_glob_sync_does_not_wipe_lockfile() {
         .dir
         .child("asphalt.lock.toml")
         .assert(toml_eq(expected.into()));
+}
+
+fn add_audio(project: &Project, path: &str) -> ChildPath {
+    let file = project.dir.child(path);
+    file.write_binary(b"OggS not really audio").unwrap();
+    file
+}
+
+fn lockfile_with(entries: &[(&ChildPath, i64)]) -> toml::Table {
+    let mut table = toml::Table::new();
+    table.insert("version".into(), 2.into());
+    table.insert("inputs".into(), {
+        let mut inputs = toml::Table::new();
+        inputs.insert("assets".into(), {
+            let mut assets = toml::Table::new();
+            for (file, id) in entries {
+                let mut entry = toml::Table::new();
+                entry.insert("asset_id".into(), (*id).into());
+                assets.insert(hash(file), entry.into());
+            }
+            assets.into()
+        });
+        inputs.into()
+    });
+    table
+}
+
+fn only_test_config(project: &Project) {
+    project.write_config(toml! {
+        [creator]
+        type = "user"
+        id = 12345
+
+        [inputs.assets]
+        path = "input/**/*"
+        output_path = "output"
+    });
+}
+
+#[test]
+fn only_skips_new_assets_of_other_types() {
+    let project = Project::new();
+    only_test_config(&project);
+    let image = project.add_file("test1.png");
+    add_audio(&project, "input/sound.ogg");
+
+    project
+        .run()
+        .args(["sync", "--only", "image"])
+        .assert()
+        .success();
+
+    project.dir.child("asphalt.lock.toml").assert(toml_eq(
+        lockfile_with(&[(&image, hash_as_asset_id(&image))]).into(),
+    ));
+    project
+        .dir
+        .child("output/assets.luau")
+        .assert(contains("test1.png"))
+        .assert(contains("sound.ogg").not());
+}
+
+#[test]
+fn only_keeps_locked_assets_of_other_types() {
+    let project = Project::new();
+    only_test_config(&project);
+    let image = project.add_file("test1.png");
+    let sound = add_audio(&project, "input/sound.ogg");
+    project.write_lockfile(lockfile_with(&[(&sound, 7)]));
+
+    project
+        .run()
+        .args(["sync", "--only", "image,model"])
+        .assert()
+        .success();
+
+    project.dir.child("asphalt.lock.toml").assert(toml_eq(
+        lockfile_with(&[(&sound, 7), (&image, hash_as_asset_id(&image))]).into(),
+    ));
+    project
+        .dir
+        .child("output/assets.luau")
+        .assert(contains("[\"sound.ogg\"] = \"rbxassetid://7\""));
+}
+
+#[test]
+fn only_dry_run_ignores_other_types() {
+    let project = Project::new();
+    only_test_config(&project);
+    let image = project.add_file("test1.png");
+    add_audio(&project, "input/sound.ogg");
+    project.write_lockfile(lockfile_with(&[(&image, 1)]));
+
+    project
+        .run()
+        .args(["sync", "cloud", "--dry-run", "--only", "image"])
+        .assert()
+        .success();
+
+    project
+        .run()
+        .args(["sync", "cloud", "--dry-run"])
+        .assert()
+        .failure()
+        .stderr(contains("1 new assets"));
 }

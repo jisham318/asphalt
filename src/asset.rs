@@ -10,6 +10,7 @@ use crate::{
 };
 use anyhow::Context;
 use bytes::Bytes;
+use clap::ValueEnum;
 use image::DynamicImage;
 use relative_path::RelativePathBuf;
 use resvg::usvg::fontdb::{self};
@@ -132,6 +133,16 @@ impl Asset {
     }
 }
 
+/// Broad asset categories, used to limit which assets a sync uploads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum AssetKind {
+    Image,
+    Audio,
+    Model,
+    Animation,
+    Video,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub enum AssetType {
     Model(ModelType),
@@ -144,6 +155,16 @@ pub enum AssetType {
 }
 
 impl AssetType {
+    pub fn kind(&self) -> AssetKind {
+        match self {
+            AssetType::Model(_) | AssetType::Mesh => AssetKind::Model,
+            AssetType::Animation => AssetKind::Animation,
+            AssetType::Image(_) => AssetKind::Image,
+            AssetType::Audio(_) => AssetKind::Audio,
+            AssetType::Video(_) => AssetKind::Video,
+        }
+    }
+
     pub fn mesh_source(&self) -> Option<MeshSource> {
         match self {
             AssetType::Model(ModelType::Fbx) => Some(MeshSource::Fbx),

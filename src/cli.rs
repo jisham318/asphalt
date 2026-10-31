@@ -1,4 +1,4 @@
-use crate::config::CreatorType;
+use crate::{asset::AssetKind, config::CreatorType};
 use clap::{Args, Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use std::path::PathBuf;
@@ -70,6 +70,12 @@ pub struct SyncArgs {
     /// Path to the project directory. Defaults to the current directory.
     #[arg(short, long, default_value = ".")]
     pub project: PathBuf,
+
+    /// Only sync assets of these types (comma-separated). Assets of other types keep the IDs already
+    /// in the lockfile, and new ones are skipped: they aren't uploaded or written, and are left out
+    /// of codegen until a later sync includes their type.
+    #[arg(long, global = true, value_enum, value_delimiter = ',', num_args = 1..)]
+    pub only: Option<Vec<AssetKind>>,
 }
 
 impl SyncArgs {

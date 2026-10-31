@@ -52,6 +52,8 @@ enum Event {
         hash: Hash,
         asset_ref: Option<AssetRef>,
     },
+    /// Excluded by `--only` and not in the lockfile, so there is nothing to reference.
+    Skipped(PathBuf),
     Failed(PathBuf),
 }
 
@@ -85,6 +87,7 @@ pub async fn sync(args: SyncArgs, mp: MultiProgress) -> anyhow::Result<()> {
 
     let params = walk::Params {
         target,
+        only: args.only.clone(),
         existing_lockfile,
         font_db,
         backend: {
